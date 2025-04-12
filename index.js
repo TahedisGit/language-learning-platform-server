@@ -11,6 +11,7 @@ const port = process.env.PORT || 3000;
 
 // Serve static files from the "uploads" folder
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+app.use("/resources", express.static(path.join(__dirname, "resources")));
 
 // Middleware
 app.use(cors());
@@ -45,6 +46,8 @@ const client = new MongoClient(uri, {
 });
 
 let usersCollection;
+let packagesCollection;
+let bundlesCollection;
 
 async function run() {
   try {
@@ -54,6 +57,8 @@ async function run() {
     // Assign to global variable
     const database = client.db("language-learning-platform");
     usersCollection = database.collection("users");
+    packagesCollection = database.collection("packages");
+    bundlesCollection = database.collection("bundles");
 
     // Registration route with file upload
     app.post("/register", upload.single("photo"), async (req, res) => {
@@ -107,6 +112,20 @@ async function run() {
 
 run().catch(console.dir);
 
+// admin login route
+app.post("/admin/login", (req, res) => {
+  const { email, password } = req.body;
+  const adminEmail = process.env.ADMIN_EMAIL;
+  const adminPassword = process.env.ADMIN_PASSWORD;
+  if (email === adminEmail && password === adminPassword) {
+    return res.status(200).json({ success: true }); // Changed to success
+  } else {
+    return res
+      .status(401)
+      .json({ success: false, message: "Invalid credentials" }); // Changed to success
+  }
+});
+
 // Profile route
 app.get("/profile", async (req, res) => {
   try {
@@ -141,11 +160,18 @@ app.get("/profile", async (req, res) => {
 });
 
 // Edit Profile route
-app.put("/profile/update", async (req, res) => {
+app.put("/profile/update", upload.single("photo"), async (req, res) => {
   const { email, ...updateData } = req.body;
+
+  if (req.file) {
+    updateData.photoURL = `/uploads/${req.file.filename}`;
+  }
   delete updateData._id;
 
-  if (!email) return res.status(400).send("Email is required");
+  if (!email) {
+    return res.status(400).send("Email is required");
+  }
+  console.log("Update Data:", updateData);
 
   try {
     const result = await usersCollection.updateOne(
@@ -159,10 +185,69 @@ app.put("/profile/update", async (req, res) => {
         .json({ success: false, message: "No changes made" });
     }
 
-    res.status(200).json({ success: true, message: "Profile updated" });
+    res
+      .status(200)
+      .json({ success: true, message: "Profile updated successfully" });
   } catch (err) {
     console.error("Error updating profile:", err);
     res.status(500).send({ success: false, message: "Server error" });
+  }
+});
+
+// updata Password
+app.put("/update-password", async (req, res) => {
+  const { email, newPassword } = req.body;
+
+  if (!email || !newPassword) {
+    return res
+      .status(400)
+      .json({ message: "Email and new password are required." });
+  }
+
+  try {
+    const user = await usersCollection.findOne({ email });
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found!" });
+    }
+
+    const result = await usersCollection.updateOne(
+      { email },
+      { $set: { password: newPassword } }
+    );
+
+    if (result.modifiedCount > 0) {
+      res.status(200).json({ message: "Password updated successfully!" });
+    } else {
+      res.status(400).json({ message: "Password update failed!" });
+    }
+  } catch (error) {
+    console.error("Password update error:", error);
+    res
+      .status(500)
+      .json({ message: "Internal server error", error: error.message });
+  }
+});
+
+// Get all packages route
+app.get("/get-all-packages", async (req, res) => {
+  try {
+    const packages = await packagesCollection.find({}).toArray();
+    res.status(200).json(packages);
+  } catch (error) {
+    console.error("Error fetching packages:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+});
+
+// Get all bundles route
+app.get("/get-all-bundles", async (req, res) => {
+  try {
+    const bundles = await bundlesCollection.find({}).toArray();
+    res.status(200).json(bundles);
+  } catch (error) {
+    console.error("Error fetching bundles:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
   }
 });
 
