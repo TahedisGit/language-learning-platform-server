@@ -421,6 +421,29 @@ app.get("/get-faqs", async (req, res) => {
   }
 });
 
+// get packages from the bundle with full data from packagesCollection
+app.get("/packages/:packageId", async (req, res) => {
+  try {
+    const { packageId } = req.params;
+
+    // Fetch the document from packagesCollection
+    const packageData = await packagesCollection.findOne();
+
+    // If a matching package is found, filter out the matched package
+    const matchedPackage = packageData.packages.find(
+      (package) => package.package_id === packageId
+    );
+
+    if (matchedPackage) {
+      res.json(matchedPackage);
+    } else {
+      res.status(404).json({ message: "Package not found" });
+    }
+  } catch (error) {
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
 // Start the Server
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
